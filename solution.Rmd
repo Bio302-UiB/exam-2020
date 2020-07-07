@@ -53,7 +53,7 @@ Your answers should be fully reproducible and include publication quality graphi
 
 If there are problems, please ask me richard.telford@uib.no
 
-# Solution
+# Notes for a solution
 
 # 1) Registered reports
 
@@ -71,13 +71,13 @@ Advantages:
 Disadvantages:
 
  - takes time before experiment (but much less time afterwards as reviewer 2 cannot ask for an extra experiment)
- - limits flexibility (but can deviate from pre-registered plan but need to justify)
- - exciting new finding cannot be discussed (they can, just need to be labelled as _post hoc_)
+ - limits flexibility (but can deviate from pre-registered plan but need to justify - lots of flexibility in analysis risks p-hacking)
+ - unexpected finding cannot be discussed (they can, just need to be labelled as _post hoc_)
  - unsuitable for some types of work (purely exploratory; urgent work e.g. after an unexpected event that needs researching)
 
 Also:
  
-- PARKing possible (pre-registration after results known - but this is misconduct)
+- PARKing possible (pre-registration after results known - this is misconduct)
 
 Useful references:
 
@@ -91,7 +91,7 @@ Chambers, C. 2019. What’s next for Registered Reports? Nature 573: 187–89. h
 - False discovery rate
 - p = 0.04 is weak evidence against the null. 
 - Cannot be properly evaluated without knowing plausibility of alternative hypothesis (implausible alternatives need more compelling evidence).
-- effect size is a more useful statistic.
+- effect size is a more useful (but still not sufficient) statistic.
 
 Useful reference:
 
@@ -111,7 +111,7 @@ Detect:
 
 - graphically with ACF/PACF plots or variograms.
 - with Durbin-Watson test (equally spaced observations only)
-- test if adding autocorrelation to model (gls or lme) improves the model
+- test if adding autocorrelation to model (gls or lme) improves the fit (AIC etc)
 
 Control: by adding autocorrelation structure to model (gls or lme) 
 
@@ -119,7 +119,7 @@ Useful reference:
 
 Legendre, P. (1993), Spatial Autocorrelation: Trouble or New Paradigm?. Ecology, 74: 1659-1673. doi:10.2307/1939924
 
-# 4) Biomass data
+# 4) Biomass analysis
 
 ```{r packages, results = "hide", message=FALSE}
 library("tidyverse")
@@ -130,7 +130,7 @@ library("broom")
 library("here")
 ```
 
-Multiple ways to process data. ~All code in tidyverse solution below was covered in the course. None tidyverse solutions were accepted provided they were reproducible. 
+Multiple ways to process data. ~All code in tidyverse solution below was covered in the course. Non-tidyverse solutions were accepted provided they were clear and reproducible. 
 
 ```{r temperature-data}
 
@@ -194,7 +194,7 @@ biomass <- biomass0 %>%
 ```{r quick-biomass-plot}
 biomass %>% ggplot(aes(x = temp, y = biomass, fill = site)) + geom_boxplot()
 ```
-Grouped data. Need to use mixed effect model (or as number of levels in random effect is low, perhaps a ordinary least squares model with site as fixed effect).
+Grouped data - each site is a cluster. Need to use mixed effect model (or as number of levels in random effect is low, perhaps a ordinary least squares model with site as fixed effect).
 Data are continuous, so need model that has a continuous response. Gaussian is the obvious place to start. NB you cannot tell this by looking at a histogram of biomass. You need to look at the residuals. 
 
 ```{r model}
@@ -237,6 +237,13 @@ model4 <- update(model1, fixed = log(biomass) ~ temp)
 #compare models
 AIC(model1, model2, model3)#AIC from model 4 is not comparable
 ```
+QQplots
+
+```{r qqnorm}
+qqnorm(model2, abline = c(0, 1)) # not great, but not too bad
+qqnorm(model2, ~ranef(.)) # too few clusters to be very useful
+```
+
 
 Model 2 is best model with untransformed response and is easier to interpret than log-normal model. Suggests some sites have low variance, some high, but no pattern. With more sites, would be clearer if there is a pattern (e.g. more variance with high biomass)
 
