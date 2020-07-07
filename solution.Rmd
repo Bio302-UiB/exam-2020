@@ -1,0 +1,292 @@
+---
+title: "Bio 302 Exam 2020"
+author: "Richard J. Telford"
+date: "`r format(Sys.Date(), '%d %B %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits = 1) # set default number of decimal places to print in text
+```
+
+## Questions
+
+1) Discuss the advantages and challenges of pre-registering an experiment. 
+
+2) A statistical test has a p-value of 0.04.
+ - How should this p-value be interpreted? Is it good evidence against the null hypothesis?
+
+3) Explain what autocorrelation is, how it can be detected and how its effect on regression can be controlled for.
+
+4) Model the relationship between total plant biomass in alpine grasslands and summer air temperature in China. Available data are biomass per species per plot. There are ~15 plots in each of four sites. Each site is at a different elevation and has a climate logger.  
+
+Climate data can be downloaded from https://osf.io/34qnr/
+
+Biomass data can be downloaded from https://osf.io/6sfqw/ (you already have these on Rstudio.cloud).
+
+Calculate mean summer air temperatures each site. Use the logger "gradient". The OTC logger is part of another experiment. 
+
+Calculate biomass per plot (you have already done this).
+
+Join the climate data to the biomass data.
+
+Choose and fit a suitable model to find the relation a biomass and mean summer temperature. 
+
+Check the model's assumptions are met.
+
+Report key statistics from your model in a table or in the text.
+
+Make a publication quality plot that shows the relationship between biomass and mean summer temperature.
+
+Write the statistical part of the methods and results sections of a manuscript describing the biomass-climate relationship. You should justify your choice of model.
+
+Write a biological interpretation of your final model.					
+
+Your manuscript should be fully reproducible. That is, I should be able to render your rmarkdown file and generate all results.
+
+## Instructions
+
+Please answer all questions. Please do not google-copy-paste answers - I will check for plagiarism.
+
+Your answers should be fully reproducible and include publication quality graphics where relevant. Submit as html or pdf and include the Rmarkdown file.
+
+If there are problems, please ask me richard.telford@uib.no
+
+# Solution
+
+# 1) Registered reports
+
+Define pre-registration
+
+Advantages:
+
+ - avoid publication bias (explain what this is, why it is bad etc) 
+ - avoid HARKing (define, explain, etc)
+ - reduce scope for p-hacking (more explicit pre-registration -> less scope)
+ - reviewer feedback can improve experimental design before work done
+ - more credible research (because people know it is not result of HARKing etc)
+ - forces power tests before analysis - make sure experiment has enough power
+ 
+Disadvantages:
+
+ - takes time before experiment (but much less time afterwards as reviewer 2 cannot ask for an extra experiment)
+ - limits flexibility (but can deviate from pre-registered plan but need to justify)
+ - exciting new finding cannot be discussed (they can, just need to be labelled as _post hoc_)
+ - unsuitable for some types of work (purely exploratory; urgent work e.g. after an unexpected event that needs researching)
+
+Also:
+ 
+- PARKing possible (pre-registration after results known - but this is misconduct)
+
+Useful references:
+
+Chambers, C. 2019. What’s next for Registered Reports? Nature 573: 187–89. https://doi.org/10.1038/d41586-019-02674-6.
+
+# 2) p-value
+
+- Define p-value.
+- Significance threshold 
+- Explain type-I errors
+- False discovery rate
+- p = 0.04 is weak evidence against the null. 
+- Cannot be properly evaluated without knowing plausibility of alternative hypothesis (implausible alternatives need more compelling evidence).
+- effect size is a more useful statistic.
+
+Useful reference:
+
+Colquhoun, D. 2014. An investigation of the false discovery rate and the misinterpretation of p-values. Royal Society Open Science 1:140216. https://doi.org/10.1098/rsos.140216
+
+Also:
+
+<blockquote class="twitter-tweet"><p lang="en" dir="ltr">live video of a statistician trying to keep researchers away from p-values <a href="https://t.co/qd5kHIUEfP">pic.twitter.com/qd5kHIUEfP</a></p>&mdash; 🔥Kareem Carr🔥 (@kareem_carr) <a href="https://twitter.com/kareem_carr/status/1279789002099437569?ref_src=twsrc%5Etfw">July 5, 2020</a></blockquote> <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script> 
+
+
+# 3) Autocorrelation
+
+- Positive autocorrelation - Observations that are geographically or temporally close are more similar than expected (also phylogenetic autocorrelation).
+- Positive autocorrelation causes statistical tests to be too liberal - p-values are too low, confidence intervals are too narrow. Effective number of observations less (perhaps much less) than the number of observations.
+
+Detect:
+
+- graphically with ACF/PACF plots or variograms.
+- with Durbin-Watson test (equally spaced observations only)
+- test if adding autocorrelation to model (gls or lme) improves the model
+
+Control: by adding autocorrelation structure to model (gls or lme) 
+
+Useful reference:
+
+Legendre, P. (1993), Spatial Autocorrelation: Trouble or New Paradigm?. Ecology, 74: 1659-1673. doi:10.2307/1939924
+
+# 4) Biomass data
+
+```{r packages, results = "hide", message=FALSE}
+library("tidyverse")
+library("lubridate")
+library("readxl")
+library("nlme")
+library("broom")
+library("here")
+```
+
+Multiple ways to process data. ~All code in tidyverse solution below was covered in the course. None tidyverse solutions were accepted provided they were reproducible. 
+
+```{r temperature-data}
+
+#Use relative paths. Absolute paths hinder reproducibility
+climate_file <- "data/China_2013_2016_AirTemp_month.csv"
+#or use here::here
+climate_file <- here("data", "China_2013_2016_AirTemp_month.csv")
+# here::here is particularly useful in Rmd files which might not in the project root directory
+
+# import csv file with read.csv or read_csv - latter returns tibble 
+clim0 <- read_csv(climate_file)
+
+clim1 <- clim0 %>% 
+  #rename month column
+  rename(date = month) %>% 
+  #filter to keep only logger data
+  filter(logger == "gradient") %>%
+  #mutating site so 1) has sites in logical order (not alphabetical) and 2) has useful labels
+  mutate(site = factor(site, levels = c("H", "A", "M", "L"), labels = c("High alpine", "Alpine", "Mid alpine", "Low alpine")))
+
+
+#ALWAYS a good idea to plot data - check for dubious values etc
+ggplot(clim1, aes(x = date, y = value, colour = site)) + 
+  geom_line() + 
+  geom_point()
+#Note some missing data. Need to decide how to treat this.
+#In this case probably OK to just take mean ignoring missing data as this should not give large bias. Would be a problem if e.g. one site only had September data
+
+#calculate summer means
+clim <- clim1 %>% 
+  select(-variable) %>% 
+  #many solutions to filtering out summer data. Simplest is to use lubridate::month. Solutions using regular expressions or tidyr::separate are less transparent and are fragile if date format changes
+  # here defining summer as June-September - 4 warmest months. Other definitions valid and probably all highly correlated with each other
+  filter(between(month(date), 6, 9)) %>% 
+  group_by(site) %>% 
+  #Always use TRUE/FALSE not T/F
+  summarise(temp = mean(value, na.rm = TRUE))
+  
+  
+clim
+```
+
+```{r biomass-data, warning=FALSE}
+biomass_file <- here("data", "biomass2015.xls")
+#purrr::map_df is short way to import data from multiple sheets/files. lapply %>%  bind_rows also works. do.call("rbind", ...) is a confusing construction best avoided
+biomass0 <- map_df(.x = excel_sheets(biomass_file),
+                   .f = ~read_excel(biomass_file, sheet = .x))
+#this generates a lot of warnings for sheet 4 - not obvious why.
+
+biomass <- biomass0 %>% 
+  select(site, plot, biomass = production) %>% 
+  group_by(site, plot) %>% 
+  mutate(site = factor(site, levels = c("H", "A", "M", "L"), labels = c("High alpine", "Alpine", "Mid alpine", "Low alpine"))) %>% 
+  summarise(biomass = sum(biomass, na.rm = TRUE)) %>% 
+# join biomass to climate data
+# merge also works but is much slower on large datasets and less informative
+  left_join(clim, by = "site")
+
+```
+
+```{r quick-biomass-plot}
+biomass %>% ggplot(aes(x = temp, y = biomass, fill = site)) + geom_boxplot()
+```
+Grouped data. Need to use mixed effect model (or as number of levels in random effect is low, perhaps a ordinary least squares model with site as fixed effect).
+Data are continuous, so need model that has a continuous response. Gaussian is the obvious place to start. NB you cannot tell this by looking at a histogram of biomass. You need to look at the residuals. 
+
+```{r model}
+model1 <- lme(biomass ~ temp, data = biomass, random = ~1|site)
+summary(model1)
+```
+
+## Diagnostics
+
+No information on spatial arrangement of plots - cannot check for autocorrelation. 
+Testing for AR1 only makes sense if plots are equally spaced along a transect.
+
+### residuals
+
+```{r diagnostic-plot}
+plot(model1)
+```
+
+Residual variance different at each site - response is heteroskedastic. Possible solutions
+
+- ignore
+- allow variance to vary by site
+- allow variance to vary by temperature
+- change distribution. Perhaps log-normal or gamma with `lme4::glmer` (not shown here). Both these would fail with a plot with zero biomass. Log-normal suggests that variance is related to the amount of biomass.
+
+
+```{r heteroskedastic}
+biomass %>% 
+  group_by(site) %>% 
+  summarise(variance = var(biomass))
+```
+
+```{r}
+#update model1 to to let variance vary by site
+model2 <- update(model1, weights = varIdent(form = ~1|site))
+#update model1 to to let variance vary by temperature
+model3 <- update(model1, weights = varFixed(value = ~ temp))
+#update model1 to use log-normal
+model4 <- update(model1, fixed = log(biomass) ~ temp)
+#compare models
+AIC(model1, model2, model3)#AIC from model 4 is not comparable
+```
+
+Model 2 is best model with untransformed response and is easier to interpret than log-normal model. Suggests some sites have low variance, some high, but no pattern. With more sites, would be clearer if there is a pattern (e.g. more variance with high biomass)
+
+Is there evidence for a quadratic relationship? We know that at a large scale there will be a quadratic relationship - there will be little biomass anywhere where the mean summer temperature is 50°C! But the warmest site in the data is only `r max(clim$temp)`°C - even colder than Bergen. From an ecological perspective, it seems unlikely that grasslands would have maximum biomass at so low a temperature. From a statistical perspective, the apparent curvature is driven by only one site. With the available data, it is probably prudent to fit a straight line and let the random effect take up the variability. 
+
+
+## A publication quality plot
+
+There are various ways to plot these data. But any plot showing the relationship between biomass and temperature needs to show the modelled relationship (ideally with confidence intervals - but this is hard with `lme` - https://bbolker.github.io/mixedmodels-misc/glmmFAQ.html).
+
+Here I'm showing two alternatives - I think I prefer the geom_point - gives more emphasis to the trendline rather than the site data.
+
+```{r main-plot}
+#predictions
+pred <- tibble(
+  temp = seq(min(biomass$temp), max(biomass$temp), length.out = 10), 
+  biomass = predict(model2, newdata = tibble(temp = temp), level = 0))
+
+ggplot(biomass, aes(x = temp, y = biomass)) + 
+  geom_boxplot(aes(fill = site), alpha = 0.5) + #best to use fill rather than colour
+  geom_line(data = pred) + 
+  #change fill to have meaningful colours
+  scale_fill_brewer(palette = "RdYlBu", direction = -1) +
+  #axis labels with units
+  labs(x = "Summer temperature °C", y = "Biomass g/0.25 m²") +
+  theme_bw()
+
+ggplot(biomass, aes(x = temp, y = biomass)) + 
+  geom_point(aes(colour = site), alpha = 0.5, position = position_jitter(height = 0, width = 0.1)) + #jitter *slightly*
+  geom_line(data = pred) + 
+  #change fill to have meaningful colours
+  scale_colour_brewer(palette = "RdYlBu", direction = -1) +
+  #axis labels with units
+  labs(x = "Summer temperature °C", y = "Biomass g/0.25 m²") +
+  theme_bw()
+```
+
+
+```{r}
+model2_coef <- tidy(model2, effects = "fixed")
+model2_coef %>% knitr::kable(digits = 2, caption = "Model coefficients")
+```
+
+## Methods
+
+Describe what you had done. Cite important packages.
+
+## Results
+
+Make results section reproducible by having inline code to show numbers.
+
+Effect of temperature on biomass is positive (`r model2_coef %>% filter(term == "temp") %>% pull(estimate)` g/0.25 m²/°C), but not significant (p = `r model2_coef %>% filter(term == "temp") %>% pull(p.value)`). Lack of significance is probably because there are so few sites giving few degrees of freedom for the test. A better design would have more sites (perhaps with fewer replicates at each site)
+
