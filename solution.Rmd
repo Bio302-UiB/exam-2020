@@ -138,7 +138,7 @@ Multiple ways to process data. ~All code in tidyverse solution below was covered
 climate_file <- "data/China_2013_2016_AirTemp_month.csv"
 #or use here::here
 climate_file <- here("data", "China_2013_2016_AirTemp_month.csv")
-# here::here is particularly useful in Rmd files which might not in the project root directory
+# here::here is particularly useful in Rmd files which might not be in the project root directory
 
 # import csv file with read.csv or read_csv - latter returns tibble 
 clim0 <- read_csv(climate_file)
@@ -178,7 +178,7 @@ biomass_file <- here("data", "biomass2015.xls")
 #purrr::map_df is short way to import data from multiple sheets/files. lapply %>%  bind_rows also works. do.call("rbind", ...) is a confusing construction best avoided
 biomass0 <- map_df(.x = excel_sheets(biomass_file),
                    .f = ~read_excel(biomass_file, sheet = .x))
-#this generates a lot of warnings for sheet 4 - not obvious why.
+#this generates a lot of warnings for sheet 4 - not obvious why, data seem fine
 
 biomass <- biomass0 %>% 
   select(site, plot, biomass = production) %>% 
@@ -186,14 +186,17 @@ biomass <- biomass0 %>%
   mutate(site = factor(site, levels = c("H", "A", "M", "L"), labels = c("High alpine", "Alpine", "Mid alpine", "Low alpine"))) %>% 
   summarise(biomass = sum(biomass, na.rm = TRUE)) %>% 
 # join biomass to climate data
-# merge also works but is much slower on large datasets and less informative
+# merge() also works but is much slower on large datasets and less informative
   left_join(clim, by = "site")
 
 ```
 
 ```{r quick-biomass-plot}
-biomass %>% ggplot(aes(x = temp, y = biomass, fill = site)) + geom_boxplot()
+biomass %>% 
+  ggplot(aes(x = temp, y = biomass, fill = site)) +
+  geom_boxplot()
 ```
+
 Grouped data - each site is a cluster. Need to use mixed effect model (or as number of levels in random effect is low, perhaps a ordinary least squares model with site as fixed effect).
 Data are continuous, so need model that has a continuous response. Gaussian is the obvious place to start. NB you cannot tell this by looking at a histogram of biomass. You need to look at the residuals. 
 
@@ -237,6 +240,8 @@ model4 <- update(model1, fixed = log(biomass) ~ temp)
 #compare models
 AIC(model1, model2, model3)#AIC from model 4 is not comparable
 ```
+I'm using `update` rather than re-writing the whole model. The advantage of this is that if I make any change to the original model (change model type, subset data, change response variable etc), it will automatically be reflected in any new models made with `update` (unless the `update` changes the same aspect of the model).
+
 QQplots
 
 ```{r qqnorm}
@@ -272,7 +277,8 @@ ggplot(biomass, aes(x = temp, y = biomass)) +
   theme_bw()
 
 ggplot(biomass, aes(x = temp, y = biomass)) + 
-  geom_point(aes(colour = site), alpha = 0.5, position = position_jitter(height = 0, width = 0.1)) + #jitter *slightly*
+  geom_point(aes(colour = site), alpha = 0.4, position = position_jitter(height = 0, width = 0.1)) + #jitter *slightly*
+  stat_summary(fun.data = "mean_se", geom = "point", mapping = aes(colour = site), size = 3) + #site means
   geom_line(data = pred) + 
   #change fill to have meaningful colours
   scale_colour_brewer(palette = "RdYlBu", direction = -1) +
